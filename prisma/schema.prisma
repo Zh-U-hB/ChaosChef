@@ -1,0 +1,22 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Customer {
+  id                  String @id @default(cuid())
+  name                String
+  region              String
+  personality         String
+  dietaryRestrictions String // JSON array stored as string
+}
+
+model Dish {
+  id      String @id @default(cuid())
+  name    String
+  cuisine String
+}
