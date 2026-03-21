@@ -45,7 +45,7 @@ export function Inventory() {
       <div>
         <p className="mb-2 text-xs text-amber-500/80">助手带来的食材（选择要处理的）</p>
         <div className="flex flex-wrap gap-2">
-          {ingredients.map((ing) => (
+          {(ingredients ?? []).map((ing) => (
             <button
               key={ing}
               onClick={() => toggle(ing)}

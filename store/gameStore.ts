@@ -37,7 +37,7 @@ interface GameState {
 }
 
 export const useGameStore = create<GameState>((set) => ({
-  phase: "loading",
+  phase: "start",
   customer: null,
   dish: null,
   orderDialogue: "",
@@ -52,7 +52,7 @@ export const useGameStore = create<GameState>((set) => ({
       customer: data.customer,
       dish: data.dish,
       orderDialogue: data.orderDialogue,
-      ingredients: data.ingredients,
+      ingredients: data.ingredients ?? [],
       operationLog: [],
       plating: [],
       result: null,
@@ -81,7 +81,7 @@ export const useGameStore = create<GameState>((set) => ({
 
   resetRound: () =>
     set({
-      phase: "loading",
+      phase: "start",
       customer: null,
       dish: null,
       orderDialogue: "",

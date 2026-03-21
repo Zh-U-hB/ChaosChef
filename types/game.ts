@@ -50,4 +50,15 @@ export interface SubmitResult {
   score: JudgeScore;
 }
 
-export type GamePhase = 'loading' | 'ordering' | 'cooking' | 'plating' | 'judging' | 'result';
+export type GamePhase = 'start' | 'loading' | 'ordering' | 'cooking' | 'plating' | 'judging' | 'result';
+
+export interface AIModelConfig {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface AppSettings {
+  textAI: AIModelConfig;
+  imageAI: AIModelConfig;
+}

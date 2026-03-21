@@ -1,15 +1,17 @@
 import { NextRequest } from "next/server";
 import { streamFeedback, generateDishImage } from "@/lib/agents/resultAgent";
-import type { DishSubmission, CustomerData, DishData } from "@/types/game";
+import type { AIModelConfig, DishSubmission, CustomerData, DishData } from "@/types/game";
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
     customer: CustomerData;
     dish: DishData;
     submission: DishSubmission;
+    textConfig: AIModelConfig;
+    imageConfig: AIModelConfig;
   };
 
-  const { customer, dish, submission } = body;
+  const { customer, dish, submission, textConfig, imageConfig } = body;
 
   const encoder = new TextEncoder();
 
@@ -23,21 +25,26 @@ export async function POST(req: NextRequest) {
 
       try {
         // Fire image generation in parallel (don't await yet)
-        const imagePromise = generateDishImage(dish, submission).catch(() => "");
+        const imagePromise = generateDishImage(dish, submission, imageConfig).catch((err) => {
+          console.error("[image gen failed]", err?.message ?? err);
+          send("imageError", { message: String(err?.message ?? "图片生成失败") });
+          return "";
+        });
 
         // Stream feedback text
-        const { fullText, score } = await streamFeedback(
+        const { cleanedText, score } = await streamFeedback(
           customer,
           dish,
           submission,
-          (chunk) => send("feedback", { chunk })
+          (chunk) => send("feedback", { chunk }),
+          textConfig
         );
 
         // Wait for image
         const imageUrl = await imagePromise;
 
         // Send final result event
-        send("result", { feedback: fullText, score, imageUrl });
+        send("result", { feedback: cleanedText, score, imageUrl });
       } catch (err) {
         console.error("[/api/dish/submit]", err);
         send("error", { message: "Failed to generate result" });

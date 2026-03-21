@@ -1,34 +1,39 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { getRandomCustomer, getRandomDish } from "@/lib/db/queries";
 import { buildOrderDialoguePrompt } from "@/lib/prompts/orderDialogue";
-import type { RoundStartResponse } from "@/types/game";
+import type { AIModelConfig, RoundStartResponse } from "@/types/game";
 
-const client = new Anthropic();
+export async function runRoundStartAgent(config: AIModelConfig): Promise<RoundStartResponse> {
+  const client = new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.baseUrl || undefined,
+  });
 
-export async function runRoundStartAgent(): Promise<RoundStartResponse> {
   const [customer, dish] = await Promise.all([getRandomCustomer(), getRandomDish()]);
 
   const prompt = buildOrderDialoguePrompt(customer, dish);
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
+  const response = await client.chat.completions.create({
+    model: config.model,
     max_tokens: 512,
     messages: [{ role: "user", content: prompt }],
   });
 
-  const text = message.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("");
+  const text = response.choices[0]?.message?.content ?? "";
 
   let parsed: { orderDialogue: string; ingredients: string[] };
   try {
     parsed = JSON.parse(text);
   } catch {
-    // fallback if model adds extra text around JSON
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Failed to parse round start response");
-    parsed = JSON.parse(match[0]);
+    // fallback: extract JSON block from markdown-wrapped responses
+    const match = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/\{[\s\S]*\}/);
+    const raw = Array.isArray(match) ? (match[1] ?? match[0]) : null;
+    if (!raw) throw new Error("Failed to parse model response");
+    parsed = JSON.parse(raw);
+  }
+
+  if (!parsed.orderDialogue || !Array.isArray(parsed.ingredients)) {
+    throw new Error(`Invalid model response — missing fields. Got: ${JSON.stringify(parsed)}`);
   }
 
   return {

@@ -1,19 +1,21 @@
-import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { buildFeedbackPrompt } from "@/lib/prompts/feedback";
 import { buildImagePrompt } from "@/lib/prompts/imagePainter";
-import type { CustomerData, DishData, DishSubmission, JudgeScore } from "@/types/game";
-
-const anthropic = new Anthropic();
-const openai = new OpenAI();
+import type { AIModelConfig, CustomerData, DishData, DishSubmission, JudgeScore } from "@/types/game";
 
 // Streams customer feedback text via SSE, returns the full text and score when done.
 export async function streamFeedback(
   customer: CustomerData,
   dish: DishData,
   submission: DishSubmission,
-  onChunk: (chunk: string) => void
-): Promise<{ fullText: string; score: JudgeScore }> {
+  onChunk: (chunk: string) => void,
+  config: AIModelConfig
+): Promise<{ cleanedText: string; score: JudgeScore }> {
+  const client = new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.baseUrl || undefined,
+  });
+
   const prompt = buildFeedbackPrompt(
     customer,
     dish,
@@ -21,24 +23,67 @@ export async function streamFeedback(
     submission.plating
   );
 
-  const stream = await anthropic.messages.stream({
-    model: "claude-sonnet-4-6",
+  const stream = await client.chat.completions.create({
+    model: config.model,
     max_tokens: 512,
     messages: [{ role: "user", content: prompt }],
+    stream: true,
   });
 
   let fullText = "";
-  for await (const chunk of stream) {
-    if (
-      chunk.type === "content_block_delta" &&
-      chunk.delta.type === "text_delta"
-    ) {
-      onChunk(chunk.delta.text);
-      fullText += chunk.delta.text;
-    }
-  }
+  let inThink = false;
+  let buf = ""; // buffer for partial tag detection
 
-  // Parse score from the last JSON block in the response
+  const OPEN = "<think>";
+  const CLOSE = "</think>";
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (!delta) continue;
+    fullText += delta;
+    buf += delta;
+
+    let output = "";
+    while (buf.length > 0) {
+      if (inThink) {
+        const closeIdx = buf.indexOf(CLOSE);
+        if (closeIdx !== -1) {
+          inThink = false;
+          buf = buf.slice(closeIdx + CLOSE.length).replace(/^\n+/, "");
+        } else {
+          buf = buf.slice(-CLOSE.length + 1); // keep partial match window
+          break;
+        }
+      } else {
+        const openIdx = buf.indexOf(OPEN);
+        if (openIdx === -1) {
+          // check for partial <think> at end of buffer
+          let keepFrom = buf.length;
+          for (let i = OPEN.length - 1; i > 0; i--) {
+            if (buf.endsWith(OPEN.slice(0, i))) { keepFrom = buf.length - i; break; }
+          }
+          output += buf.slice(0, keepFrom);
+          buf = buf.slice(keepFrom);
+          break;
+        } else {
+          output += buf.slice(0, openIdx);
+          inThink = true;
+          buf = buf.slice(openIdx + OPEN.length);
+        }
+      }
+    }
+    if (output) onChunk(output);
+  }
+  // flush remaining
+  if (buf && !inThink) onChunk(buf);
+
+  // Cleaned text: strip think blocks + trailing score JSON
+  const cleanedText = fullText
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/\{[^{}]*"ingredientScore"[^{}]*\}/, "")
+    .trim();
+
+  // Parse score from the full raw response
   const scoreMatch = fullText.match(/\{[^{}]*"ingredientScore"[^{}]*\}/);
   let score: JudgeScore = {
     ingredientScore: 5,
@@ -66,21 +111,26 @@ export async function streamFeedback(
     }
   }
 
-  return { fullText, score };
+  return { cleanedText, score };
 }
 
 export async function generateDishImage(
   dish: DishData,
-  submission: DishSubmission
+  submission: DishSubmission,
+  config: AIModelConfig
 ): Promise<string> {
+  const client = new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.baseUrl || undefined,
+  });
+
   const prompt = buildImagePrompt(dish, submission.operationLog, submission.plating);
 
-  const response = await openai.images.generate({
-    model: "dall-e-3",
+  const response = await client.images.generate({
+    model: config.model,
     prompt,
     n: 1,
     size: "1024x1024",
-    quality: "standard",
   });
 
   return response.data?.[0]?.url ?? "";

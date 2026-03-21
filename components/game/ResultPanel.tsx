@@ -16,23 +16,31 @@ export function ResultPanel() {
   const { result, streamedFeedback, customer, dish, resetRound } = useGameStore();
 
   const feedbackText = result?.feedback ?? streamedFeedback;
-  // Strip the trailing JSON score from display text
-  const displayText = feedbackText.replace(/\{[^{}]*"ingredientScore"[^{}]*\}/, "").trim();
+  const displayText = feedbackText
+    .replace(/<think>[\s\S]*?<\/think>/g, "")          // strip reasoning blocks
+    .replace(/\{[^{}]*"ingredientScore"[^{}]*\}/, "")  // strip score JSON
+    .trim();
 
   const cfg = result ? RATING_CONFIG[result.score.rating] : null;
 
   return (
     <div className="space-y-5">
       {/* Dish image */}
-      {result?.imageUrl && (
-        <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-amber-800/30">
-          <Image
-            src={result.imageUrl}
-            alt={dish?.name ?? "菜品"}
-            fill
-            className="object-cover"
-          />
-        </div>
+      {result && (
+        result.imageUrl ? (
+          <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-amber-800/30">
+            <Image
+              src={result.imageUrl}
+              alt={dish?.name ?? "菜品"}
+              fill
+              className="object-cover"
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center aspect-square w-full rounded-2xl border border-stone-800 bg-stone-900/40 text-stone-600 text-sm">
+            图片生成失败，请检查图像 AI 配置（URL / Key / 模型）
+          </div>
+        )
       )}
 
       {/* Customer feedback */}
