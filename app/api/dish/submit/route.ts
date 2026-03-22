@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { streamFeedback, generateDishImage } from "@/lib/agents/resultAgent";
-import type { AIModelConfig, DishSubmission, CustomerData, DishData } from "@/types/game";
+import type { AIModelConfig, ChaosEvent, DishSubmission, CustomerData, DishData } from "@/types/game";
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
@@ -9,9 +9,10 @@ export async function POST(req: NextRequest) {
     submission: DishSubmission;
     textConfig: AIModelConfig;
     imageConfig: AIModelConfig;
+    chaosEvent?: ChaosEvent;
   };
 
-  const { customer, dish, submission, textConfig, imageConfig } = body;
+  const { customer, dish, submission, textConfig, imageConfig, chaosEvent } = body;
 
   const encoder = new TextEncoder();
 
@@ -37,7 +38,8 @@ export async function POST(req: NextRequest) {
           dish,
           submission,
           (chunk) => send("feedback", { chunk }),
-          textConfig
+          textConfig,
+          chaosEvent
         );
 
         // Wait for image

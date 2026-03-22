@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { buildFeedbackPrompt } from "@/lib/prompts/feedback";
 import { buildImagePrompt } from "@/lib/prompts/imagePainter";
-import type { AIModelConfig, CustomerData, DishData, DishSubmission, JudgeScore } from "@/types/game";
+import type { AIModelConfig, ChaosEvent, CustomerData, DishData, DishSubmission, JudgeScore } from "@/types/game";
 
 // Streams customer feedback text via SSE, returns the full text and score when done.
 export async function streamFeedback(
@@ -9,7 +9,8 @@ export async function streamFeedback(
   dish: DishData,
   submission: DishSubmission,
   onChunk: (chunk: string) => void,
-  config: AIModelConfig
+  config: AIModelConfig,
+  chaosEvent?: ChaosEvent
 ): Promise<{ cleanedText: string; score: JudgeScore }> {
   const client = new OpenAI({
     apiKey: config.apiKey,
@@ -20,7 +21,8 @@ export async function streamFeedback(
     customer,
     dish,
     submission.operationLog,
-    submission.plating
+    submission.plating,
+    chaosEvent
   );
 
   const stream = await client.chat.completions.create({

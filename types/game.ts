@@ -1,11 +1,23 @@
 export type CookingAction = 'steam' | 'fry' | 'bake' | 'boil' | 'raw' | 'mix' | 'cut';
+export type CookingIntensity = 'light' | 'normal' | 'heavy';
 
 export interface OperationStep {
   step: number;
   action: CookingAction;
+  intensity?: CookingIntensity;
   ingredients: string[];
   duration?: string;
   note?: string;
+}
+
+export type ChaosEventType = 'oven_broken' | 'mystery_ingredient' | 'picky_customer' | 'inspiration';
+
+export interface ChaosEvent {
+  type: ChaosEventType;
+  title: string;
+  description: string;
+  bannedAction?: CookingAction;
+  bonusIngredient?: string;
 }
 
 export interface DishSubmission {
@@ -33,7 +45,9 @@ export interface RoundStartResponse {
   customer: CustomerData;
   dish: DishData;
   orderDialogue: string;
+  assistantQuote: string;
   ingredients: string[];
+  chaosEvent?: ChaosEvent;
 }
 
 export interface JudgeScore {
